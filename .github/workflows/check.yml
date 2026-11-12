@@ -1,0 +1,9 @@
+name: check generated themes
+on: [push, pull_request]
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 generate.py --check
+      - run: python3 -m unittest -v
