@@ -13,7 +13,7 @@ python3 -B -m unittest -v
 ```
 
 CI checks that outputs match the canonical definition and exercises palette
-propagation, independent semantic roles, platform variants, and invalid aliases.
+propagation, independent semantic roles, shared surfaces, and invalid aliases.
 `--check` never writes files. Generation validates and renders all three outputs
 before writing any of them. Run the same commands after every token change.
 
@@ -27,8 +27,7 @@ and [color values](https://www.designtokens.org/tr/2025.10/color/):
   string/number brown, keyword yellow, green, teal, blue, purple, and deletion red.
   `base07` aliases `base06`: there is no invented extra white. Emacs's `base0`–
   `base8` symbols are Doom variables, **not** Base16 slot names.
-- Other `palette` colors: only existing platform-specific colors that cannot be
-  collapsed without changing the appearance, including terminal and web colors.
+- `palette.selection`: the existing dark selection blue, beyond the Base16 ramp.
 - `semantic`: aliases for background, foreground, accents, syntax, selection,
   state, and platform roles. `semantic.foreground` uses `base06` (white), not
   Base16's customary `base05`; `base05` preserves Emacs's softer `#dfdfdf` text.
@@ -43,37 +42,72 @@ and [color values](https://www.designtokens.org/tr/2025.10/color/):
 
 Color literals use `colorSpace` and `components`, not legacy hex-string token
 values. For sRGB, components are red/green/blue in 0–1 (divide each hex byte by
-255); for OKLCH they are lightness in 0–1, chroma, hue. Existing OKLCH values stay
-OKLCH: generation never converts or gamut-clips the web palette. The small
-generator supports the types used here: opaque sRGB/OKLCH colors, px/rem
+255); for OKLCH they are lightness in 0–1, chroma, hue. All current colors use
+sRGB, including the web theme, so shared roles have identical values. The small
+generator supports opaque sRGB/OKLCH colors (OKLCH for web only), px/rem
 dimensions, and numbers. It rejects unknown/circular aliases, mismatched types,
 invalid components, and unsupported editor color spaces.
 
-Emacs placeholders `{{semantic.emacs.bg|emacs}}` expand to the original
-true-color/256-color/16-color triples. Their terminal fallbacks are declared in
-the token's namespaced extension; `null` stays Lisp `nil`. A placeholder without
+Emacs placeholders `{{semantic.emacs.bg|emacs}}` expand to
+true-color/256-color/16-color triples. The 256-color value defaults to the same
+RGB color; optional terminal fallbacks are declared in the token's namespaced
+extension, and `null` stays Lisp `nil`. A placeholder without
 `|emacs` expands to a single color inside an existing Lisp string. Doom blends
 remain runtime expressions so terminal behavior and modeline customization are
 preserved. The generator does not evaluate Lisp.
 
 ## Reconciliation decisions
 
-| Existing difference | Resolution |
+| Role / existing difference | Uniform default |
 | --- | --- |
-| Emacs comment/success/addition green `#98be65`; Neovim/web green `#99bb66` | Preserve the Emacs variant explicitly; shared green is `base0B`. |
-| Emacs `green`, `blue`, `magenta`, `violet`, `cyan`, `dark-cyan` are white in true color | Preserve the intentional monochrome substitutions and every terminal fallback. The old `greeen` symbol remains compatible. |
-| Neovim's `blue` is actually teal `#4db5bd` | Bind it to the shared type color, `base0C`; retain the Colorbuddy export name. |
-| Emacs operator/category constants vs Neovim operator/constants and legacy `TSConstant` | Preserve their distinct roles: Emacs operators are yellow and constants white; Neovim operators are white and `Constant` yellow, while `TSConstant` stays white. Explicit Emacs font-lock overrides remain separate from Doom categories. |
-| Editor background `#18191b`; different Emacs/Neovim secondary surfaces and muted grays; web OKLCH surfaces/content | Preserve named platform variants rather than forcing a new neutral ramp on existing UIs. |
-| Emacs error red, unused Neovim fallback red, and web OKLCH error red differ | Preserve all three. Neovim's extra exported colors remain available to Colorbuddy consumers. Web info stays its original brown/orange, not a newly invented blue. |
-| Neovim `colors.bg` depends on Colorbuddy defaults | Bind Normal and Whitespace backgrounds explicitly to `semantic.background`; verified identical with the installed Colorbuddy. Keep the original `gray0` export. |
-| daisyUI says `prefersdark: true` but `color-scheme: "light"` | Correct to `"dark"`. All custom property values are unchanged; native browser controls/scrollbars now use the intended dark scheme. |
-| Emacs describes itself as a light Atom One theme and has the wrong footer | Correct descriptive text only. Retain the `doom-custom` theme name and `doom-homage-black-padded-modeline` customization for compatibility. |
+| Numbers, strings, characters | Brown `#b4916d`; numbers are not bold. |
+| Types, including struct tags and function-pointer typedefs | Teal `#4db5bd`. |
+| Keywords, constants, macros | Yellow `#ecbe7b`; macro replacement numbers remain brown. |
+| Functions, variables, operators, punctuation | White `#ffffff`. |
+| Emacs green `#98be65` vs Neovim/web green `#99bb66` | Comments, primary accent, success and additions use `#99bb66`. |
+| Different editor and web surfaces | Background `#18191b`, surface/current line `#202328`, raised surface `#3f444a`, foreground white. Line numbers use `#9ca0a4`. |
+| Different status colors, including web info brown | Error red `#ff6c6b`, warning yellow, success green, info teal. |
+| Emacs monochrome substitutions for chromatic colors | Restore shared chromatic roles; retain compatibility names, including `greeen` and Neovim's teal `blue`. |
+| Neovim background depends on Colorbuddy defaults | Bind the background explicitly. |
+| daisyUI dark preference with a light native color scheme | Use `color-scheme: "dark"`. |
 
-No plugin integrations were removed: Doom face overrides, Colorbuddy C/C++, legacy
-Tree-sitter and Org groups, which-key groups, styles, and modeline logic remain.
-The disabled alternative Lua implementation and commented-out color experiments
-were not additional active theme definitions and are not generated.
+These differences were accidental, not compatibility requirements. Platform
+color aliases now reference shared semantic roles instead of preserving separate
+RGB/OKLCH variants. Doom integrations, modeline padding, Colorbuddy exports,
+legacy Tree-sitter groups, Org and which-key integrations remain available.
+
+Modern Neovim Tree-sitter and LSP groups are mapped as well as legacy groups.
+Emacs's C adapter supplies missing numeric highlighting in classic C/C++ modes;
+for C/C++ Tree-sitter modes it also handles macro names/replacement numbers,
+constants and character literals. It does not enable a parser or change major
+modes. Its buffer-local rules are removed/reinstalled when switching themes.
+Syntax classification still depends on the active parser: a theme cannot give
+classic regex-based highlighting all the information available to a parser or
+language server. In particular, native Neovim C queries classify function-like
+macro calls as ordinary calls; LSP macro captures are yellow, but calls remain
+white without that semantic classification. Macro definitions are yellow in
+either case.
+
+## Showcase and editor checks
+
+`examples/showcase.c` is a compilable sample covering object/function/variadic
+macros, struct tags, typedefs, enums, a function-pointer typedef and indirect call,
+designated initializers, casts, operators, strings, escapes, and decimal, hex,
+octal and scientific numeric literals. Compile with
+`cc -std=c11 -Wall -Wextra -Werror examples/showcase.c -o /tmp/schwarzwald-showcase`.
+
+Optional real-editor tests run alongside the dependency-free generator tests:
+
+```sh
+DOOM_THEMES_DIR=/path/to/doom-themes \
+TREE_SITTER_C_DIR=/path/to/emacs/grammars \
+COLORBUDDY_DIR=/path/to/colorbuddy.nvim \
+python3 -B -m unittest -v
+```
+
+They require Emacs, Neovim, and their C grammars; unset paths skip the respective
+checks. Tests exercise actual syntax captures, comment/string negative controls,
+and Emacs theme switching rather than just inspecting generated text.
 
 ## Installation and extension
 

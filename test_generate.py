@@ -37,21 +37,27 @@ class GenerationTests(unittest.TestCase):
         self.assertIn(f"Color.new('{name}', '#3399ff')", lua)
         self.assertEqual(before["schwarzwald.css"], outputs["schwarzwald.css"])
 
-    def test_platform_variants_and_terminal_fallbacks_survive(self):
-        self.document["palette"]["emacs-comment"]["$value"] = {
-            "colorSpace": "srgb", "components": [0.2, 0.4, 0.8]}
+    def test_shared_surfaces_and_green_have_no_platform_variants(self):
         self.document["palette"]["base0B"]["$value"] = {
             "colorSpace": "srgb", "components": [0.8, 0.6, 0.2]}
-        self.document["palette"]["web-base-100"]["$value"] = {
-            "colorSpace": "oklch", "components": [0.17, 0.03, 142]}
+        self.document["palette"]["base00"]["$value"] = {
+            "colorSpace": "srgb", "components": [0.2, 0.4, 0.8]}
         self.document["semantic"]["web"]["size-field"]["$value"] = {"value": 0.375, "unit": "rem"}
         outputs = render(self.document)
         el, lua, css = (outputs[k] for k in ("doom-custom-theme.el", "theme.lua", "schwarzwald.css"))
-        self.assertRegex(el, r'\(comments\s+\x27\("#3366cc" "#cc9933" "green"\)\)')
+        self.assertRegex(el, r'\(comments\s+\x27\("#cc9933" "#cc9933" "green"\)\)')
         self.assertIn('Color.new("green", "#cc9933")', lua)
-        self.assertIn('--color-base-100: oklch(17% 0.03 142);', css)
+        self.assertIn('--color-primary: #cc9933;', css)
+        self.assertRegex(el, r'\(bg\s+\x27\("#3366cc" "#3366cc" nil\)\)')
+        self.assertIn('Color.new("background", "#3366cc")', lua)
+        self.assertIn('--color-base-100: #3366cc;', css)
         self.assertIn('--size-field: 0.375rem;', css)
         self.assertIn('color-scheme: "dark";', css)
+
+    def test_oklch_web_tokens_remain_supported(self):
+        self.document["semantic"]["web"]["color-info"]["$value"] = {
+            "colorSpace": "oklch", "components": [0.17, 0.03, 142]}
+        self.assertIn('--color-info: oklch(17% 0.03 142);', render(self.document)["schwarzwald.css"])
 
     def test_bad_tokens_fail_before_rendering(self):
         for value, error in (("{missing.color}", "Unknown token"),
